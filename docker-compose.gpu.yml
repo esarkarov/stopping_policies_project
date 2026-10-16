@@ -1,0 +1,10 @@
+# Use together with docker-compose.yml on a machine with an NVIDIA GPU.
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

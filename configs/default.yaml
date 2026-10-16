@@ -1,0 +1,18 @@
+# Experiment settings (Section 4 of the proposal)
+model: qwen3.5:4b
+temperature: 0
+think: false            # Qwen3.5 thinking mode off
+
+agent:
+  max_steps: 5          # T_max
+  passages_per_step: 2  # top-2 new passages per search
+
+data:
+  seed: 42
+  n_questions: 300      # per dataset
+  n_pilot: 30           # separate pilot questions
+  datasets: [hotpotqa, musique]
+
+paths:
+  data_dir: data
+  results_dir: results
