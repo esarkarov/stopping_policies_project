@@ -1,7 +1,3 @@
-"""Measure how long one model call takes, with and without thinking mode.
-
-Run inside Docker:  docker compose run --rm app python scripts/speed_test.py
-"""
 import os
 import time
 
