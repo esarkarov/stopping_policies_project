@@ -41,6 +41,26 @@ If the MuSiQue download fails (Google Drive limit), download the zip manually fr
 https://drive.google.com/file/d/1tGdADlNjWFaHLeZZGShh2IRcpO6Lv24h/view,
 save it as `data/raw/musique_data_v1.0.zip` and run step 2 again.
 
+## Check the model speed
+
+The first run also downloads the model (`qwen3.5:4b`, several GB, only once).
+
+```bash
+docker compose run --rm app python scripts/speed_test.py
+```
+
+With an NVIDIA GPU, add the GPU file to every command that uses the model:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm app python scripts/speed_test.py
+```
+
+To use a smaller model:
+
+```bash
+MODEL=qwen3.5:2b docker compose run --rm app python scripts/speed_test.py
+```
+
 ## Run the agent
 
 ```bash
@@ -53,6 +73,17 @@ docker compose run --rm app python scripts/run_agent.py --dataset musique --spli
 ```
 
 Trajectories are written to `results/trajectories/<dataset>_<split>.jsonl`, one question per line. A stopped run continues where it stopped, and model answers are cached in `results/cache/`.
+
+## Evaluate the stopping policies
+
+No model is needed. The policies are applied to the saved trajectories.
+
+```bash
+docker compose run --rm --no-deps app python scripts/run_eval.py --dataset hotpotqa --split pilot
+docker compose run --rm --no-deps app python scripts/run_eval.py --dataset musique --split pilot
+```
+
+Outputs in `results/tables/`: `<name>_per_question.csv`, `<name>_summary.csv` (EM, F1, searches, calls, tokens, gold recall with bootstrap 95% CIs), `<name>_errors.csv` (error categories) and `<name>_vs_fixed.csv` (paired differences of P1, P2, P3 against fixed budgets k=1..5). Plots of quality against searches are in `results/figures/`.
 
 ## Tests
 
@@ -72,14 +103,16 @@ This keeps the downloaded model. Add `-v` only to delete it as well.
 
 ## Project structure
 
-| Path                                   | Purpose                                                 |
-| -------------------------------------- | ------------------------------------------------------- |
-| `configs/default.yaml`                 | Experiment settings                                     |
-| `src/data.py`, `src/hotpot_convert.py` | Loading, sampling and corpus building                   |
-| `src/retriever.py`                     | BM25 retrieval                                          |
-| `src/llm.py`, `src/prompts.py`         | Model wrapper with cache, prompts                       |
-| `src/agent.py`                         | Five-step search agent                                  |
-| `scripts/`                             | Entry points (download, prepare, speed test, run agent) |
-| `tests/`                               | Unit tests                                              |
-| `data/`                                | Datasets and corpora (downloaded, not in git)           |
-| `results/`                             | Saved trajectories, tables and plots                    |
+| Path                                              | Purpose                                                           |
+| ------------------------------------------------- | ----------------------------------------------------------------- |
+| `configs/default.yaml`                            | Experiment settings                                               |
+| `src/data.py`, `src/hotpot_convert.py`            | Loading, sampling and corpus building                             |
+| `src/retriever.py`                                | BM25 retrieval                                                    |
+| `src/llm.py`, `src/prompts.py`                    | Model wrapper with cache, prompts                                 |
+| `src/agent.py`                                    | Five-step search agent                                            |
+| `src/policies.py`, `src/metrics.py`               | Stopping rules, cost accounting, EM/F1                            |
+| `src/evaluate.py`, `src/stats.py`, `src/plots.py` | Evaluation tables, bootstrap CIs, figures                         |
+| `scripts/`                                        | Entry points (download, prepare, speed test, run agent, evaluate) |
+| `tests/`                                          | Unit tests                                                        |
+| `data/`                                           | Datasets and corpora (downloaded, not in git)                     |
+| `results/`                                        | Saved trajectories, tables and plots                              |

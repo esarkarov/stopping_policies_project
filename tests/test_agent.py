@@ -13,7 +13,7 @@ from src.retriever import BM25Retriever
 PASSAGES = [
     {"pid": f"p{i}", "title": f"Title {i}", "text": f"Text about topic{i} and alpha beta {i}."} for i in range(12)
 ]
-EXAMPLE = {"id": "q1", "dataset": "hotpotqa", "question": "What is alpha beta?", "answer": "x", "gold_pids": ["p1"]}
+EXAMPLE = {"id": "q1", "dataset": "hotpotqa", "question": "What is alpha beta?", "answer": "x", "answer_aliases": ["y"], "gold_pids": ["p1"]}
 
 
 class FakeLLM:
@@ -52,6 +52,7 @@ def test_agent_runs_all_steps_and_never_repeats_passages():
     pids = [r["pid"] for s in trajectory["steps"] for r in s["retrieved"]]
     assert len(pids) == 10 and len(set(pids)) == 10
     assert trajectory["subquestions"] == ["What is alpha?", "What is beta?"]
+    assert trajectory["answer_aliases"] == ["y"]
     first = trajectory["steps"][0]
     assert first["draft_answer"] == "forty two"
     assert first["p1_enough"] is True and first["p3_covered"] == [True, True]

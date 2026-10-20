@@ -1,4 +1,3 @@
-# Use together with docker-compose.yml on a machine with an NVIDIA GPU.
 services:
   ollama:
     deploy:

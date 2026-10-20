@@ -1,6 +1,3 @@
-# Default setup: runs on CPU, so it works on any machine with Docker.
-# For an NVIDIA GPU, add the GPU file:
-#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
 services:
   ollama:
     image: ollama/ollama:latest
@@ -12,7 +9,6 @@ services:
       timeout: 5s
       retries: 20
 
-  # Downloads the model once; it is stored in the ollama_models volume.
   ollama-pull:
     image: ollama/ollama:latest
     environment:

@@ -97,6 +97,7 @@ class SearchAgent:
             "dataset": example["dataset"],
             "question": question,
             "answer": example["answer"],
+            "answer_aliases": example.get("answer_aliases", []),
             "gold_pids": example["gold_pids"],
             "subquestions": subquestions,
             "decompose_call": _usage(decomposition),
