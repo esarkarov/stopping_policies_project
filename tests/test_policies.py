@@ -24,6 +24,8 @@ def test_p2_normalises_and_ignores_abstentions():
     assert stop_p2(make_traj(["Unknown", "Unknown", "Not enough information", "Not enough information", "Rome"])) == 5
     assert stop_p2(make_traj(["", "", "Rome", "Rome", "Rome"])) == 4
     assert is_abstention("Not enough information provided") and not is_abstention("Paris")
+    assert is_abstention("Not mentioned in passages") and is_abstention("None") and is_abstention("N/A")
+    assert not is_abstention("None of the Above Records")
 
 
 def test_oracle_uses_first_correct_draft_else_best_f1_step():

@@ -14,12 +14,14 @@ ABSTENTION_PHRASES = (
     "not specified",
     "unclear",
     "no answer",
+    "not mentioned",
+    "no mention",
 )
 
 
 def is_abstention(draft: str) -> bool:
     text = normalize_answer(draft)
-    if not text:
+    if not text or text in ("none", "na"):
         return True
     return len(text.split()) <= 10 and any(phrase in text for phrase in ABSTENTION_PHRASES)
 

@@ -10,9 +10,10 @@ def query_prompt(question: str, passages: list[dict], queries: list[str], max_ch
         "You answer a question by searching a document collection with a keyword search engine.\n\n"
         f"Question: {question}\n\n"
         f"Passages found so far:\n{format_passages(passages, max_chars)}\n\n"
-        f"Earlier queries:\n{earlier}\n\n"
-        "Write one short search query (a few keywords) that would find the information "
-        "still missing to answer the question. Do not repeat an earlier query.\n"
+        f"Earlier queries (already used, do not reuse them):\n{earlier}\n\n"
+        "Write one new search query (a few keywords) for the information still missing to answer "
+        "the question. Name the missing fact, entity or relation that the passages do not yet mention, "
+        "and use keywords that do not appear in any earlier query.\n"
         "Reply in the form:\nQuery: <search query>"
     )
 
@@ -39,7 +40,10 @@ def enough_prompt(question: str, passages: list[dict], max_chars: int) -> str:
 def decompose_prompt(question: str) -> str:
     return (
         "Break the question into the simple sub-questions that must be answered to answer it "
-        "(between 2 and 4). Write one per line, numbered like '1. ...'.\n\n"
+        "(between 2 and 4, one per reasoning step). Each sub-question asks for one missing fact "
+        "(who, what, when, where, how many). Use only facts stated in the question; do not guess "
+        "any answer and do not write yes/no verification questions. "
+        "Write one per line, numbered like '1. ...'.\n\n"
         f"Question: {question}"
     )
 
