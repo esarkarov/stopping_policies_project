@@ -5,4 +5,7 @@ data/*
 !data/.gitkeep
 results/*
 !results/.gitkeep
+!results/trajectories/
+!results/tables/
+!results/figures/
 .env

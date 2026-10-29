@@ -1,0 +1,10 @@
+policy,correct,over-searching,premature stop,not caused by stopping,late_stop_among_correct
+P0_k1,15,0,4,11,0
+P0_k2,15,2,2,11,13
+P0_k3,16,2,1,11,15
+P0_k4,16,2,1,11,16
+P0_k5,17,2,0,11,16
+P1,17,1,1,11,6
+P2,16,2,1,11,15
+P3,17,1,1,11,8
+Oracle,19,0,0,11,0
