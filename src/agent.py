@@ -1,6 +1,7 @@
 import re
 
 from src import prompts
+from src.retriever import tokenize
 
 
 def parse_query(text: str) -> str:
@@ -36,6 +37,16 @@ def parse_coverage(text: str, n: int) -> list[bool]:
     return [flags.get(i, False) for i in range(1, n + 1)]
 
 
+def is_repeat(query: str, earlier: list[str], threshold: float = 0.8) -> bool:
+    tokens = set(tokenize(query))
+    for other in earlier:
+        other_tokens = set(tokenize(other))
+        union = tokens | other_tokens
+        if union and len(tokens & other_tokens) / len(union) >= threshold:
+            return True
+    return False
+
+
 def _usage(call: dict) -> dict:
     return {k: call[k] for k in ("prompt_tokens", "completion_tokens", "seconds")}
 
@@ -62,6 +73,14 @@ class SearchAgent:
                 "query", prompts.query_prompt(question, seen, queries, self.max_chars), 48
             )
             query = parse_query(q_call["text"]) or question
+            retry_call = None
+            if is_repeat(query, queries):
+                retry_call = self.llm.generate(
+                    "query_retry",
+                    prompts.retry_query_prompt(question, seen, queries, query, self.max_chars),
+                    48,
+                )
+                query = parse_query(retry_call["text"]) or query
             new = self.retriever.search(query, k=self.k, exclude={p["pid"] for p in seen})
             seen.extend(new)
             queries.append(query)
@@ -71,6 +90,15 @@ class SearchAgent:
             c_call = self.llm.generate(
                 "check_coverage", prompts.coverage_prompt(question, subquestions, seen, self.max_chars), 64
             )
+
+            calls = {
+                "query": _usage(q_call),
+                "answer": _usage(a_call),
+                "check_enough": _usage(e_call),
+                "check_coverage": _usage(c_call),
+            }
+            if retry_call:
+                calls["query_retry"] = _usage(retry_call)
 
             steps.append(
                 {
@@ -83,12 +111,7 @@ class SearchAgent:
                     "p1_raw": e_call["text"],
                     "p3_covered": parse_coverage(c_call["text"], len(subquestions)),
                     "p3_raw": c_call["text"],
-                    "calls": {
-                        "query": _usage(q_call),
-                        "answer": _usage(a_call),
-                        "check_enough": _usage(e_call),
-                        "check_coverage": _usage(c_call),
-                    },
+                    "calls": calls,
                 }
             )
 

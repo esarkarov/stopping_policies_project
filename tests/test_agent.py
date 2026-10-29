@@ -2,6 +2,7 @@ import pytest
 
 from src.agent import (
     SearchAgent,
+    is_repeat,
     parse_answer,
     parse_coverage,
     parse_query,
@@ -26,6 +27,7 @@ class FakeLLM:
         text = {
             "decompose": "1. What is alpha?\n2. What is beta?",
             "query": "Query: alpha beta",
+            "query_retry": f"Query: topic{len(self.prompts)}",
             "answer": "Answer: forty two.",
             "check_enough": self.enough,
             "check_coverage": self.coverage,
@@ -63,7 +65,7 @@ def test_checks_never_change_what_the_agent_sees():
     agent_yes, agent_no = FakeLLM("Yes", "1: yes\n2: yes"), FakeLLM("No", "1: no\n2: no")
     make_agent(agent_yes).run(EXAMPLE)
     make_agent(agent_no).run(EXAMPLE)
-    main_calls = lambda llm: [(k, p) for k, p in llm.prompts if k in ("decompose", "query", "answer")]
+    main_calls = lambda llm: [(k, p) for k, p in llm.prompts if k in ("decompose", "query", "query_retry", "answer")]
     assert main_calls(agent_yes) == main_calls(agent_no)
     for kind, prompt in agent_yes.prompts:
         if kind in ("query", "answer"):
@@ -78,3 +80,23 @@ def test_unparsable_query_falls_back_to_question():
     )
     trajectory = make_agent(llm).run(EXAMPLE)
     assert trajectory["steps"][0]["query"] == EXAMPLE["question"]
+
+
+def test_is_repeat_ignores_order_and_case():
+    assert is_repeat("Alpha beta", ["beta alpha"])
+    assert not is_repeat("gamma delta", ["alpha beta"])
+    assert not is_repeat("alpha", [])
+
+
+def test_repeated_query_is_retried_once_and_the_call_is_saved():
+    trajectory = make_agent(FakeLLM()).run(EXAMPLE)
+    first, second = trajectory["steps"][0], trajectory["steps"][1]
+    assert "query_retry" not in first["calls"] and first["query"] == "alpha beta"
+    assert "query_retry" in second["calls"] and second["query"].startswith("topic")
+
+
+def test_retry_prompt_names_the_repeated_query():
+    llm = FakeLLM()
+    make_agent(llm).run(EXAMPLE)
+    retries = [p for k, p in llm.prompts if k == "query_retry"]
+    assert retries and all('"alpha beta" repeats an earlier query' in p for p in retries)

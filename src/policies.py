@@ -79,7 +79,11 @@ def stop_step(policy: str, traj: dict, correct_by_step: list[bool], f1_by_step: 
 
 def policy_cost(policy: str, traj: dict, stop: int) -> dict:
     steps = traj["steps"][:stop]
-    needed = [step["calls"]["query"] for step in steps]
+    needed = []
+    for step in steps:
+        needed.append(step["calls"]["query"])
+        if "query_retry" in step["calls"]:
+            needed.append(step["calls"]["query_retry"])
     last_answer = steps[-1]["calls"]["answer"]
 
     if policy.startswith("P0_k") or policy == "Oracle":

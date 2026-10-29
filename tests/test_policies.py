@@ -45,3 +45,10 @@ def test_cost_of_each_policy_counts_only_the_calls_it_needs():
     assert policy_cost("P1", traj, 3) == {"calls": 7, "tokens": 3 * 11 + 3 * 31 + 21}
     assert policy_cost("P2", traj, 3) == {"calls": 6, "tokens": 3 * 11 + 3 * 21}
     assert policy_cost("P3", traj, 3) == {"calls": 8, "tokens": 55 + 3 * 11 + 3 * 41 + 21}
+
+
+def test_retry_call_is_counted_in_every_policy():
+    traj = make_traj(list("abcde"))
+    traj["steps"][1]["calls"]["query_retry"] = {"prompt_tokens": 7, "completion_tokens": 1, "seconds": 1.0}
+    assert policy_cost("P0_k2", traj, 2) == {"calls": 4, "tokens": 2 * 11 + 8 + 21}
+    assert policy_cost("P0_k1", traj, 1) == {"calls": 2, "tokens": 11 + 21}
