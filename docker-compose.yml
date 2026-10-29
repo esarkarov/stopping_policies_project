@@ -1,6 +1,6 @@
 services:
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.5
     volumes:
       - ollama_models:/root/.ollama
     healthcheck:
@@ -10,7 +10,7 @@ services:
       retries: 20
 
   ollama-pull:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.5
     environment:
       - OLLAMA_HOST=http://ollama:11434
     entrypoint: ["ollama", "pull", "${MODEL:-qwen3.5:4b}"]
