@@ -85,3 +85,41 @@ def plot_quality_vs_cost(summary, metric: str, title: str, path, cost: str = "se
     fig.tight_layout(rect=(0, 0.03, 1, 1))
     fig.savefig(path, dpi=200, facecolor=SURFACE)
     plt.close(fig)
+
+
+STEP_RAMP = ["#dbe8f9", "#a9c8ee", "#6fa2e0", "#2a78d6", "#0f4a93"]
+STEP_TEXT = [INK, INK, INK, "#ffffff", "#ffffff"]
+
+
+def plot_stop_steps(counts, title: str, path) -> None:
+    rows = counts.set_index("policy")
+    labels = {"P1": "P1 self-decided", "P2": "P2 answer stability", "P3": "P3 sub-question coverage", "Oracle": "Oracle"}
+    policies = [p for p in labels if p in rows.index]
+    fig, ax = plt.subplots(figsize=(6.4, 3.2), facecolor=SURFACE)
+    ax.set_facecolor(SURFACE)
+    for row_i, policy in enumerate(policies):
+        values = rows.loc[policy].astype(float)
+        shares = values / values.sum()
+        left = 0.0
+        for i, share in enumerate(shares):
+            ax.barh(row_i, share, left=left, color=STEP_RAMP[i], edgecolor=SURFACE, linewidth=1.5, height=0.62)
+            if share >= 0.07:
+                ax.text(left + share / 2, row_i, f"{share:.0%}", ha="center", va="center", fontsize=8, color=STEP_TEXT[i])
+            left += share
+    ax.set_yticks(range(len(policies)))
+    ax.set_yticklabels([labels[p] for p in policies], color=INK, fontsize=9)
+    ax.invert_yaxis()
+    ax.set_xlim(0, 1)
+    ax.set_xticks([0, 0.25, 0.5, 0.75, 1])
+    ax.set_xticklabels(["0%", "25%", "50%", "75%", "100%"], color=INK_SECONDARY, fontsize=9)
+    ax.set_xlabel("Share of questions by the search at which the policy stops", color=INK_SECONDARY)
+    ax.set_title(title, loc="left", fontsize=11, color=INK, fontweight="bold")
+    for side in ("top", "right", "left", "bottom"):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(length=0)
+    handles = [plt.Rectangle((0, 0), 1, 1, color=STEP_RAMP[i]) for i in range(5)]
+    ax.legend(handles, [f"search {i}" for i in range(1, 6)], loc="upper center", bbox_to_anchor=(0.5, -0.22), ncol=5,
+              frameon=False, fontsize=8, labelcolor=INK_SECONDARY, handlelength=1.2, columnspacing=1.2)
+    fig.tight_layout()
+    fig.savefig(path, dpi=200, facecolor=SURFACE)
+    plt.close(fig)
