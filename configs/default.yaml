@@ -11,7 +11,7 @@ agent:
 data:
   seed: 42
   n_questions: 300
-  n_pilot: 40
+  n_pilot: 30
   n_confirm: 400
   datasets: [hotpotqa, musique]
 
