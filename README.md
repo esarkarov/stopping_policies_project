@@ -3,15 +3,44 @@
 Research project by Elvin Sarkarov and Khazar Mammadov (UFAZ).
 Supervisor: Dr. Yusif Ibrahimov.
 
-A search agent answers multi-hop questions (HotpotQA, MuSiQue) with a small open-weight model (Qwen3.5-4B via Ollama) and BM25 retrieval. The agent always runs five search steps and saves every step. Stopping policies are compared afterwards on the saved trajectories.
+A search agent answers multi-hop questions (HotpotQA, MuSiQue-Ans) with a small open-weight model (Qwen3.5-4B via Ollama) and BM25 retrieval. The agent always runs five search steps and saves every step. Stopping policies are compared afterwards on the saved trajectories:
+
+- **P0** fixed budget, k = 1 to 5 searches
+- **P1** self-decided: stop when the model says it has enough evidence
+- **P2** answer stability: stop when the draft answer does not change between two searches
+- **P3** sub-question coverage: stop when all sub-questions are covered
+- **Oracle** stops at the first correct draft (reference only, uses gold answers)
+
+Metrics: EM and F1 (F1 is the main metric), average searches and tokens per question, error categories, and paired bootstrap 95% confidence intervals.
+
+## Reproducing the results
+
+The main experiment (300 questions per dataset, 5 steps each) was run once with the prompts and policies frozen at git tag `freeze-v1`. The saved trajectories are in `results/trajectories/`, so every table and figure can be reproduced without running the model:
+
+```bash
+git clone https://github.com/esarkarov/stopping_policies_project.git
+cd stopping_policies_project
+git checkout freeze-v1   # prompts and policies as used in the main runs; later commits add analysis and docs
+docker compose build
+docker compose run --rm --no-deps app python scripts/run_eval.py --dataset hotpotqa --split main
+docker compose run --rm --no-deps app python scripts/run_eval.py --dataset musique --split main
+docker compose run --rm --no-deps app python scripts/run_analysis.py --dataset hotpotqa --split main
+docker compose run --rm --no-deps app python scripts/run_analysis.py --dataset musique --split main
+```
+
+`run_eval.py` needs the processed questions in `data/processed/`. Create them first with steps 2 and 3 under Setup (no model needed). If you use the latest commit instead of `freeze-v1`, the evaluation and analysis code is newer but the trajectories are the same.
+
+Generating new trajectories needs the model. The main trajectories were generated on a Google Colab T4 GPU (Ollama 0.40.5, no Docker) because the local machines were too slow. Different hardware can give slightly different greedy outputs, so new runs may not match the saved trajectories exactly. `notebooks/run_on_colab.ipynb` contains the notebook used.
+
+Results and discussion draft: `docs/results_section_draft.md`.
 
 ## Requirements
 
 - Docker Desktop (Windows/macOS) or Docker Engine with Compose (Linux)
-- Internet access for the first run (Docker images, model of several GB, datasets)
-- Optional: an NVIDIA GPU with recent drivers (much faster)
+- Internet access for the first run (Docker images, datasets, and the model if you run the agent)
+- Optional: an NVIDIA GPU with recent drivers (much faster for the agent)
 
-Nothing else has to be installed. Python and all packages live inside the Docker image.
+Nothing else has to be installed. Python and all packages (pinned in `requirements.txt`) live inside the Docker image.
 
 ## Setup
 
@@ -43,7 +72,7 @@ save it as `data/raw/musique_data_v1.0.zip` and run step 2 again.
 
 ## Check the model speed
 
-The first run also downloads the model (`qwen3.5:4b`, several GB, only once).
+The first run downloads the model (`qwen3.5:4b`, several GB, only once).
 
 ```bash
 docker compose run --rm app python scripts/speed_test.py
@@ -72,18 +101,43 @@ docker compose run --rm app python scripts/run_agent.py --dataset hotpotqa --spl
 docker compose run --rm app python scripts/run_agent.py --dataset musique --split main
 ```
 
-Trajectories are written to `results/trajectories/<dataset>_<split>.jsonl`, one question per line. A stopped run continues where it stopped, and model answers are cached in `results/cache/`.
+Trajectories are written to `results/trajectories/<dataset>_<split>.jsonl`, one question per line. A stopped run continues where it stopped, and model answers are cached in `results/cache/` (not in git). If a trajectory file for the split already exists, the finished questions are skipped, so move or delete it to rerun from scratch.
+
+The agent never sees the output of the stopping checks (no-feedback rule). A repeated search query is retried once with a different-query prompt (`retry_query_prompt`); these retry calls are counted in the cost of every policy.
 
 ## Evaluate the stopping policies
 
 No model is needed. The policies are applied to the saved trajectories.
 
 ```bash
-docker compose run --rm --no-deps app python scripts/run_eval.py --dataset hotpotqa --split pilot
-docker compose run --rm --no-deps app python scripts/run_eval.py --dataset musique --split pilot
+docker compose run --rm --no-deps app python scripts/run_eval.py --dataset hotpotqa --split main
+docker compose run --rm --no-deps app python scripts/run_eval.py --dataset musique --split main
 ```
 
-Outputs in `results/tables/`: `<name>_per_question.csv`, `<name>_summary.csv` (EM, F1, searches, calls, tokens, gold recall with bootstrap 95% CIs), `<name>_errors.csv` (error categories) and `<name>_vs_fixed.csv` (paired differences of P1, P2, P3 against fixed budgets k=1..5). Plots of quality against searches are in `results/figures/`.
+Use `--split pilot` for the pilot runs. Outputs in `results/tables/`:
+
+- `<name>_per_question.csv`: outcome of every policy for every question
+- `<name>_summary.csv`: EM, F1, searches, calls, tokens and gold recall with bootstrap 95% CIs
+- `<name>_errors.csv`: stopping error categories (correct, over-searching, premature stop, not caused by stopping)
+- `<name>_vs_fixed.csv`: paired differences of P1, P2, P3 against fixed budgets k = 1 to 5
+
+Plots in `results/figures/`: F1 and EM against average searches and against average tokens.
+
+## Analyse the results
+
+```bash
+docker compose run --rm --no-deps app python scripts/run_analysis.py --dataset hotpotqa --split main
+docker compose run --rm --no-deps app python scripts/run_analysis.py --dataset musique --split main
+```
+
+Additional outputs in `results/tables/`:
+
+- `<name>_stop_steps.csv`: at which search each policy stops
+- `<name>_failures.csv`: outcome at the stop (correct, near miss, reading failure, retrieval failure)
+- `<name>_examples.csv`: over-searching and premature-stop examples with queries and drafts
+- `<name>_by_hops.csv`: results by number of hops (MuSiQue only)
+
+Figure: `results/figures/<name>_stop_steps.png`.
 
 ## Tests
 
@@ -103,16 +157,23 @@ This keeps the downloaded model. Add `-v` only to delete it as well.
 
 ## Project structure
 
-| Path                                              | Purpose                                                           |
-| ------------------------------------------------- | ----------------------------------------------------------------- |
-| `configs/default.yaml`                            | Experiment settings                                               |
-| `src/data.py`, `src/hotpot_convert.py`            | Loading, sampling and corpus building                             |
-| `src/retriever.py`                                | BM25 retrieval                                                    |
-| `src/llm.py`, `src/prompts.py`                    | Model wrapper with cache, prompts                                 |
-| `src/agent.py`                                    | Five-step search agent                                            |
-| `src/policies.py`, `src/metrics.py`               | Stopping rules, cost accounting, EM/F1                            |
-| `src/evaluate.py`, `src/stats.py`, `src/plots.py` | Evaluation tables, bootstrap CIs, figures                         |
-| `scripts/`                                        | Entry points (download, prepare, speed test, run agent, evaluate) |
-| `tests/`                                          | Unit tests                                                        |
-| `data/`                                           | Datasets and corpora (downloaded, not in git)                     |
-| `results/`                                        | Saved trajectories, tables and plots                              |
+| Path                                              | Purpose                                                                     |
+| ------------------------------------------------- | --------------------------------------------------------------------------- |
+| `configs/default.yaml`                            | Experiment settings                                                         |
+| `src/data.py`, `src/hotpot_convert.py`            | Loading, sampling and corpus building                                       |
+| `src/retriever.py`                                | BM25 retrieval                                                              |
+| `src/llm.py`, `src/prompts.py`                    | Model wrapper with cache, prompts                                           |
+| `src/agent.py`                                    | Five-step search agent                                                      |
+| `src/policies.py`, `src/metrics.py`               | Stopping rules, cost accounting, EM/F1                                      |
+| `src/evaluate.py`, `src/stats.py`, `src/plots.py` | Evaluation tables, bootstrap CIs, figures                                   |
+| `src/analysis.py`                                 | Stop steps, failure breakdown, hops, examples                               |
+| `scripts/`                                        | Entry points (download, prepare, speed test, run agent, evaluate, analysis) |
+| `notebooks/`                                      | Colab notebook used for the main runs                                       |
+| `tests/`                                          | Unit tests                                                                  |
+| `docs/`                                           | Results section draft                                                       |
+| `data/`                                           | Datasets and corpora (downloaded, not in git)                               |
+| `results/`                                        | Saved trajectories, tables and plots (cache not in git)                     |
+
+## Use of AI tools
+
+Claude (Anthropic) was used as a coding and writing assistant during this project: for drafting and reviewing code, tests and Docker setup, for analysis code, and for drafting text. All experiments were run by the authors, and the reported numbers come from the saved trajectories and the tables produced by the scripts above. The authors reviewed and are responsible for the code and the text.
