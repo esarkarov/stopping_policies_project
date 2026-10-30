@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.config import load_config  # noqa: E402
 from src.evaluate import compare_to_fixed, error_table, evaluate, load_trajectories, summarize  # noqa: E402
-from src.plots import plot_quality_vs_searches  # noqa: E402
+from src.plots import plot_quality_vs_cost  # noqa: E402
 
 
 def main() -> None:
@@ -48,10 +48,10 @@ def main() -> None:
     versus.to_csv(tables / f"{name}_vs_fixed.csv", index=False)
 
     title_name = {"hotpotqa": "HotpotQA", "musique": "MuSiQue"}[args.dataset]
+    plot_title = f"{title_name} ({args.split}, n={len(trajectories)})"
     for metric in ("f1", "em"):
-        plot_quality_vs_searches(
-            summary, metric, f"{title_name} ({args.split}, n={len(trajectories)})", figures / f"{name}_{metric}_vs_searches.png"
-        )
+        plot_quality_vs_cost(summary, metric, plot_title, figures / f"{name}_{metric}_vs_searches.png")
+        plot_quality_vs_cost(summary, metric, plot_title, figures / f"{name}_{metric}_vs_tokens.png", cost="tokens")
 
     columns = ["policy", "em", "f1", "searches", "calls", "tokens", "gold_recall"]
     print(summary[columns].round(2).to_string(index=False))
