@@ -1,3 +1,4 @@
+import json
 import re
 
 import numpy as np
@@ -195,3 +196,46 @@ def compare_to_curve(df: pd.DataFrame, cost: str = "searches", n_boot: int = 100
                 }
             )
     return pd.DataFrame(rows)
+
+
+P1_THRESHOLDS = (0.5, 0.8, 0.9, 0.95, 0.99, 0.999, 0.9999)
+
+
+def load_p_yes(path) -> dict:
+    with open(path, encoding="utf-8") as f:
+        rows = [json.loads(line) for line in f if line.strip()]
+    return {row["id"]: [step["p_yes"] for step in row["steps"]] for row in rows}
+
+
+def p1_threshold_rows(trajectories: list[dict], p_yes: dict, tau: float) -> pd.DataFrame:
+    scores = step_scores(trajectories)
+    rows = []
+    for i, traj in enumerate(trajectories):
+        values = p_yes[traj["id"]]
+        stop = next((s for s, value in enumerate(values, 1) if value >= tau), len(values))
+        rows.append(
+            {
+                "id": traj["id"],
+                "policy": f"P1_t{tau}",
+                "stop_step": stop,
+                "searches": stop,
+                "tokens": policy_cost("P1", traj, stop)["tokens"],
+                "em": scores["em"][i, stop - 1],
+                "f1": scores["f1"][i, stop - 1],
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def p1_threshold_curve(df: pd.DataFrame, trajectories: list[dict], p_yes: dict, taus=P1_THRESHOLDS, n_boot: int = 10000, seed: int = 42) -> pd.DataFrame:
+    extra = pd.concat([p1_threshold_rows(trajectories, p_yes, tau) for tau in taus], ignore_index=True)
+    names = [f"P1_t{tau}" for tau in taus]
+    base = df[df["policy"].str.startswith("P0_k")][["id", "policy", "searches", "tokens", "em", "f1"]]
+    combined = pd.concat([base, extra[["id", "policy", "searches", "tokens", "em", "f1"]]], ignore_index=True)
+    summary = extra.groupby("policy").agg(searches=("searches", "mean"), tokens=("tokens", "mean"), em=("em", "mean"), f1=("f1", "mean"))
+    summary = summary.reindex(names).reset_index()
+    summary.insert(1, "tau", list(taus))
+    curves = pd.concat([compare_to_curve(combined, cost, n_boot, seed, policies=names) for cost in ("searches", "tokens")], ignore_index=True)
+    gaps = curves[curves["metric"] == "f1"].pivot(index="policy", columns="cost", values=["diff", "diff_lo", "diff_hi"])
+    gaps.columns = [f"f1_{stat}_vs_curve_{cost}" for stat, cost in gaps.columns]
+    return summary.merge(gaps.reset_index(), on="policy", how="left")

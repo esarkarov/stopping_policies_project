@@ -12,6 +12,8 @@ from src.analysis import (  # noqa: E402
     compare_to_curve,
     failure_breakdown,
     failure_examples,
+    load_p_yes,
+    p1_threshold_curve,
     shuffled_stop_baseline,
     signal_quality,
     stop_distribution,
@@ -74,6 +76,12 @@ def main() -> None:
     )
     curves.to_csv(tables / f"{name}_vs_curve.csv", index=False)
     print(curves[curves["metric"] == "f1"].round(3).to_string(index=False))
+
+    p_yes_path = results / "trajectories" / f"{name}.p1_logprobs.jsonl"
+    if p_yes_path.exists():
+        threshold = p1_threshold_curve(df, trajectories, load_p_yes(p_yes_path), n_boot=args.bootstrap, seed=seed)
+        threshold.to_csv(tables / f"{name}_p1_threshold.csv", index=False)
+        print(threshold.round(3).to_string(index=False))
     print(f"{len(examples)} examples; tables in {tables}, figures in {figures}")
 
 
