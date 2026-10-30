@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -13,14 +15,17 @@ def load_trajectories(path, questions_path=None) -> list[dict]:
     aliases = {}
     if questions_path:
         aliases = {q["id"]: q.get("answer_aliases", []) for q in read_jsonl(questions_path)}
-    seen, trajectories = set(), []
+    seen, trajectories, duplicates = set(), [], 0
     for traj in read_jsonl(path):
         if traj["id"] in seen:
+            duplicates += 1
             continue
         seen.add(traj["id"])
         if not traj.get("answer_aliases"):
             traj["answer_aliases"] = aliases.get(traj["id"], [])
         trajectories.append(traj)
+    if duplicates:
+        warnings.warn(f"{path}: dropped {duplicates} duplicate trajectories (kept the first of each id)", stacklevel=2)
     return trajectories
 
 
@@ -103,7 +108,7 @@ def error_table(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compare_to_fixed(df: pd.DataFrame, n_boot: int = 10000, seed: int = 42) -> pd.DataFrame:
-    wide = {metric: df.pivot(index="id", columns="policy", values=metric) for metric in ("em", "f1", "searches")}
+    wide = {metric: df.pivot(index="id", columns="policy", values=metric) for metric in ("em", "f1", "searches", "tokens")}
     rows = []
     for policy in [p for p in ADAPTIVE if p in set(df["policy"])]:
         for k in FIXED_BUDGETS:

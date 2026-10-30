@@ -8,6 +8,7 @@ from src.data import (
     load_musique,
     prepare_dataset,
     read_jsonl,
+    sample_confirm,
     sample_questions,
 )
 
@@ -97,3 +98,23 @@ def test_prepare_dataset_writes_files(raw_dir, tmp_path):
     for q in read_jsonl(out / "musique" / "main.jsonl"):
         assert q["gold_pids"] and set(q["gold_pids"]) <= corpus_pids
         assert "passages" not in q
+
+
+def test_confirm_sample_is_seeded_disjoint_and_leaves_main_unchanged(raw_dir, tmp_path):
+    examples = load_hotpotqa(raw_dir / "hotpot_dev_distractor_v1.json")
+    pilot, main = sample_questions(examples, n_main=8, n_pilot=3, seed=42)
+    used = {e["id"] for e in pilot + main}
+    confirm = sample_confirm(examples, used, n=5, seed=42)
+    assert len(confirm) == 5 and not {e["id"] for e in confirm} & used
+    assert [e["id"] for e in confirm] == [e["id"] for e in sample_confirm(list(reversed(examples)), used, n=5, seed=42)]
+    with pytest.raises(ValueError):
+        sample_confirm(examples, used, n=10, seed=42)
+
+    without, with_confirm = tmp_path / "a", tmp_path / "b"
+    prepare_dataset("hotpotqa", raw_dir, without, n_main=8, n_pilot=3, seed=42)
+    stats = prepare_dataset("hotpotqa", raw_dir, with_confirm, n_main=8, n_pilot=3, seed=42, n_confirm=5)
+    assert stats["confirm_questions"] == 5 and not (without / "hotpotqa" / "confirm.jsonl").exists()
+    for split in ("pilot", "main"):
+        assert read_jsonl(without / "hotpotqa" / f"{split}.jsonl") == read_jsonl(with_confirm / "hotpotqa" / f"{split}.jsonl")
+    ids = {s: {q["id"] for q in read_jsonl(with_confirm / "hotpotqa" / f"{s}.jsonl")} for s in ("pilot", "main", "confirm")}
+    assert not ids["confirm"] & (ids["pilot"] | ids["main"])

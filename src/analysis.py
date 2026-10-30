@@ -1,8 +1,12 @@
 import re
 
+import numpy as np
 import pandas as pd
 
-from src.policies import ADAPTIVE, POLICIES
+from src.evaluate import answers_of
+from src.metrics import best_over_answers, exact_match, f1_score
+from src.policies import ADAPTIVE, FIXED_BUDGETS, POLICIES, p1_signal, p2_signal, p3_signal, policy_cost, stop_p1, stop_p2, stop_p3
+from src.stats import bootstrap_ci, paired_diff_ci
 
 OUTCOMES = ("correct", "near miss", "reading failure", "retrieval failure")
 NEAR_MISS_F1 = 0.5
@@ -69,4 +73,125 @@ def failure_examples(df: pd.DataFrame, trajectories: list[dict], policies=ADAPTI
                         "queries": " | ".join(s["query"] for s in steps),
                     }
                 )
+    return pd.DataFrame(rows)
+
+
+STOP_FUNCTIONS = {"P1": stop_p1, "P2": stop_p2, "P3": stop_p3}
+SIGNALS = {
+    "P1": lambda steps, i: p1_signal(steps[i]),
+    "P2": p2_signal,
+    "P3": lambda steps, i: p3_signal(steps[i]),
+}
+METRICS = ("f1", "em")
+
+
+def step_scores(trajectories: list[dict]) -> dict:
+    scores = {"em": [], "f1": []}
+    for traj in trajectories:
+        answers = answers_of(traj)
+        drafts = [step["draft_answer"] for step in traj["steps"]]
+        scores["em"].append([best_over_answers(exact_match, d, answers) for d in drafts])
+        scores["f1"].append([best_over_answers(f1_score, d, answers) for d in drafts])
+    return {metric: np.array(values) for metric, values in scores.items()}
+
+
+def _mean_or_nan(values) -> float:
+    return float(np.mean(values)) if len(values) else float("nan")
+
+
+def signal_quality(trajectories: list[dict], policies=ADAPTIVE) -> pd.DataFrame:
+    scores = step_scores(trajectories)
+    n_steps = scores["em"].shape[1]
+    rows = []
+    for policy in policies:
+        signal = np.array(
+            [[SIGNALS[policy](traj["steps"], i) for i in range(n_steps)] for traj in trajectories], dtype=bool
+        )
+        for label, columns in [(str(i + 1), [i]) for i in range(n_steps)] + [("all", list(range(n_steps)))]:
+            mask = signal[:, columns]
+            row = {"policy": policy, "step": label, "n": int(mask.size), "n_signal": int(mask.sum())}
+            for metric in METRICS:
+                values = scores[metric][:, columns]
+                row[f"{metric}_signal"] = _mean_or_nan(values[mask])
+                row[f"{metric}_no_signal"] = _mean_or_nan(values[~mask])
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def shuffled_stop_baseline(trajectories: list[dict], policies=ADAPTIVE, n_perm: int = 2000, seed: int = 42) -> pd.DataFrame:
+    scores = step_scores(trajectories)
+    rng = np.random.default_rng(seed)
+    index = np.arange(len(trajectories))
+    rows = []
+    for policy in policies:
+        stops = np.array([STOP_FUNCTIONS[policy](traj) for traj in trajectories])
+        shuffled = rng.permuted(np.tile(stops, (n_perm, 1)), axis=1)
+        for metric in METRICS:
+            table = scores[metric]
+            real = float(table[index, stops - 1].mean())
+            null = table[index[None, :], shuffled - 1].mean(axis=1)
+            rows.append(
+                {
+                    "policy": policy,
+                    "metric": metric,
+                    "searches": float(stops.mean()),
+                    "real": real,
+                    "shuffled_mean": float(null.mean()),
+                    "shuffled_lo": float(np.quantile(null, 0.025)),
+                    "shuffled_hi": float(np.quantile(null, 0.975)),
+                    "diff": real - float(null.mean()),
+                    "p_value": (1 + int((null >= real).sum())) / (n_perm + 1),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def shared_check_tokens(traj: dict, policy: str, stop: int) -> int:
+    if policy not in ("P1", "P3"):
+        return policy_cost(policy, traj, stop)["tokens"]
+    steps = traj["steps"][:stop]
+    tokens = policy_cost("P0_k1", traj, stop)["tokens"]
+    if policy == "P1":
+        return tokens + sum(step["calls"]["check_enough"]["completion_tokens"] for step in steps)
+    decompose = traj["decompose_call"]
+    tokens += decompose["prompt_tokens"] + decompose["completion_tokens"]
+    return tokens + sum(step["calls"]["check_coverage"]["completion_tokens"] for step in steps)
+
+
+def with_shared_check_cost(df: pd.DataFrame, trajectories: list[dict]) -> pd.DataFrame:
+    by_id = {traj["id"]: traj for traj in trajectories}
+    shared = [
+        shared_check_tokens(by_id[row.id], row.policy, int(row.stop_step)) for row in df.itertuples(index=False)
+    ]
+    return df.assign(tokens_shared=shared)
+
+
+def compare_to_curve(df: pd.DataFrame, cost: str = "searches", n_boot: int = 10000, seed: int = 42, policies=ADAPTIVE) -> pd.DataFrame:
+    fixed = [f"P0_k{k}" for k in FIXED_BUDGETS]
+    fixed_cost = np.array([df.loc[df["policy"] == name, cost].mean() for name in fixed])
+    wide = {metric: df.pivot(index="id", columns="policy", values=metric) for metric in METRICS}
+    rows = []
+    for policy in policies:
+        value = df.loc[df["policy"] == policy, cost].mean()
+        if not fixed_cost[0] <= value <= fixed_cost[-1]:
+            continue
+        j = min(int(np.searchsorted(fixed_cost, value, side="right")) - 1, len(fixed) - 2)
+        weight = (value - fixed_cost[j]) / (fixed_cost[j + 1] - fixed_cost[j])
+        for metric in METRICS:
+            table = wide[metric]
+            curve = (1 - weight) * table[fixed[j]] + weight * table[fixed[j + 1]]
+            mean, lo, hi = paired_diff_ci(table[policy], curve, n_boot, seed)
+            rows.append(
+                {
+                    "policy": policy,
+                    "cost": cost,
+                    "cost_value": float(value),
+                    "metric": metric,
+                    "adaptive": float(table[policy].mean()),
+                    "fixed_curve": float(curve.mean()),
+                    "diff": mean,
+                    "diff_lo": lo,
+                    "diff_hi": hi,
+                }
+            )
     return pd.DataFrame(rows)

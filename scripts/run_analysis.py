@@ -1,8 +1,3 @@
-"""Analysis tables and figures from the evaluation output of run_eval.py.
-
-No model is needed:
-    docker compose run --rm --no-deps app python scripts/run_analysis.py --dataset musique --split main
-"""
 import argparse
 import sys
 from pathlib import Path
@@ -12,7 +7,16 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.analysis import by_hops, failure_breakdown, failure_examples, stop_distribution  # noqa: E402
+from src.analysis import (  # noqa: E402
+    by_hops,
+    compare_to_curve,
+    failure_breakdown,
+    failure_examples,
+    shuffled_stop_baseline,
+    signal_quality,
+    stop_distribution,
+    with_shared_check_cost,
+)
 from src.config import load_config  # noqa: E402
 from src.evaluate import load_trajectories  # noqa: E402
 from src.plots import plot_stop_steps  # noqa: E402
@@ -22,8 +26,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/default.yaml")
     parser.add_argument("--dataset", required=True, choices=["hotpotqa", "musique"])
-    parser.add_argument("--split", required=True, choices=["pilot", "main"])
+    parser.add_argument("--split", required=True, choices=["pilot", "main", "confirm"])
     parser.add_argument("--examples", type=int, default=5, help="examples per policy and category")
+    parser.add_argument("--bootstrap", type=int, default=10000, help="bootstrap samples")
+    parser.add_argument("--permutations", type=int, default=2000, help="shuffled-stop samples")
     args = parser.parse_args()
 
     cfg = load_config(ROOT / args.config)
@@ -51,6 +57,23 @@ def main() -> None:
 
     examples = failure_examples(df, trajectories, n=args.examples)
     examples.to_csv(tables / f"{name}_examples.csv", index=False)
+
+    seed = cfg["data"]["seed"]
+    signal = signal_quality(trajectories)
+    signal.to_csv(tables / f"{name}_signal.csv", index=False)
+    print(signal[signal["step"] == "all"].round(3).to_string(index=False))
+
+    shuffled = shuffled_stop_baseline(trajectories, n_perm=args.permutations, seed=seed)
+    shuffled.to_csv(tables / f"{name}_shuffled.csv", index=False)
+    print(shuffled[shuffled["metric"] == "f1"].round(3).to_string(index=False))
+
+    shared = with_shared_check_cost(df, trajectories)
+    curves = pd.concat(
+        [compare_to_curve(shared, cost, args.bootstrap, seed) for cost in ("searches", "tokens", "tokens_shared")],
+        ignore_index=True,
+    )
+    curves.to_csv(tables / f"{name}_vs_curve.csv", index=False)
+    print(curves[curves["metric"] == "f1"].round(3).to_string(index=False))
     print(f"{len(examples)} examples; tables in {tables}, figures in {figures}")
 
 

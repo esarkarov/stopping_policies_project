@@ -1,8 +1,3 @@
-"""Apply the stopping policies to saved trajectories and write tables and plots.
-
-No model is needed:
-    docker compose run --rm --no-deps app python scripts/run_eval.py --dataset hotpotqa --split pilot
-"""
 import argparse
 import sys
 from pathlib import Path
@@ -19,7 +14,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/default.yaml")
     parser.add_argument("--dataset", required=True, choices=["hotpotqa", "musique"])
-    parser.add_argument("--split", required=True, choices=["pilot", "main"])
+    parser.add_argument("--split", required=True, choices=["pilot", "main", "confirm"])
     parser.add_argument("--trajectories", default=None, help="path to a trajectory file")
     parser.add_argument("--bootstrap", type=int, default=10000, help="bootstrap samples")
     args = parser.parse_args()

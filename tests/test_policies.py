@@ -1,4 +1,4 @@
-from src.policies import is_abstention, policy_cost, stop_oracle, stop_p1, stop_p2, stop_p3, stop_step
+from src.policies import is_abstention, p1_signal, p2_signal, p3_signal, policy_cost, stop_oracle, stop_p1, stop_p2, stop_p3, stop_step
 from tests.helpers import make_traj
 
 
@@ -52,3 +52,12 @@ def test_retry_call_is_counted_in_every_policy():
     traj["steps"][1]["calls"]["query_retry"] = {"prompt_tokens": 7, "completion_tokens": 1, "seconds": 1.0}
     assert policy_cost("P0_k2", traj, 2) == {"calls": 4, "tokens": 2 * 11 + 8 + 21}
     assert policy_cost("P0_k1", traj, 1) == {"calls": 2, "tokens": 11 + 21}
+
+
+def test_signals_match_the_stop_rules():
+    traj = make_traj(["A", "B", "B", "C", "C"], p1=[False, True, False, False, False], p3=[[True, False], [True, True], [False, False], [False, False], [False, False]])
+    steps = traj["steps"]
+    assert [p1_signal(s) for s in steps] == [False, True, False, False, False]
+    assert [p2_signal(steps, i) for i in range(5)] == [False, False, True, False, True]
+    assert [p3_signal(s) for s in steps] == [False, True, False, False, False]
+    assert stop_p1(traj) == 2 and stop_p2(traj) == 3 and stop_p3(traj) == 2

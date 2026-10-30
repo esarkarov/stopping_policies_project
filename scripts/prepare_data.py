@@ -21,7 +21,13 @@ def main() -> None:
 
     for name in d["datasets"]:
         stats = prepare_dataset(
-            name, data_dir / "raw", data_dir / "processed", d["n_questions"], d["n_pilot"], d["seed"]
+            name,
+            data_dir / "raw",
+            data_dir / "processed",
+            d["n_questions"],
+            d["n_pilot"],
+            d["seed"],
+            d.get("n_confirm", 0),
         )
         print(stats)
 

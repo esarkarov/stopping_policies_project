@@ -1,15 +1,18 @@
 model: qwen3.5:4b
 temperature: 0
 think: false
+num_ctx: 4096
 
 agent:
   max_steps: 5
   passages_per_step: 2
+  max_passage_chars: 1500
 
 data:
   seed: 42
   n_questions: 300
-  n_pilot: 30
+  n_pilot: 40
+  n_confirm: 400
   datasets: [hotpotqa, musique]
 
 paths:

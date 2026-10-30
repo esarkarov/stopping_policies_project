@@ -88,11 +88,18 @@ def sample_questions(examples: list[dict], n_main: int, n_pilot: int, seed: int)
     return chosen[:n_pilot], chosen[n_pilot:]
 
 
+def sample_confirm(examples: list[dict], exclude_ids: set, n: int, seed: int) -> list[dict]:
+    pool = sorted((ex for ex in examples if ex["id"] not in exclude_ids), key=lambda ex: ex["id"])
+    if n > len(pool):
+        raise ValueError(f"requested {n} confirmation questions, only {len(pool)} left")
+    return random.Random(seed).sample(pool, n)
+
+
 def question_record(ex: dict) -> dict:
     return {k: ex[k] for k in ("id", "dataset", "question", "answer", "answer_aliases", "gold_pids")}
 
 
-def prepare_dataset(name: str, raw_dir, out_dir, n_main: int, n_pilot: int, seed: int) -> dict:
+def prepare_dataset(name: str, raw_dir, out_dir, n_main: int, n_pilot: int, seed: int, n_confirm: int = 0) -> dict:
     raw_path = Path(raw_dir) / RAW_FILES[name]
     if not raw_path.exists():
         raise FileNotFoundError(f"{raw_path} not found; run scripts/download_data.py first")
@@ -100,12 +107,15 @@ def prepare_dataset(name: str, raw_dir, out_dir, n_main: int, n_pilot: int, seed
     examples = LOADERS[name](raw_path)
     corpus = build_corpus(examples)
     pilot, main = sample_questions(examples, n_main, n_pilot, seed)
+    confirm = sample_confirm(examples, {ex["id"] for ex in pilot + main}, n_confirm, seed) if n_confirm else []
 
     out = Path(out_dir) / name
     out.mkdir(parents=True, exist_ok=True)
     write_jsonl(out / "corpus.jsonl", corpus)
     write_jsonl(out / "pilot.jsonl", (question_record(ex) for ex in pilot))
     write_jsonl(out / "main.jsonl", (question_record(ex) for ex in main))
+    if confirm:
+        write_jsonl(out / "confirm.jsonl", (question_record(ex) for ex in confirm))
 
     stats = {
         "dataset": name,
@@ -115,5 +125,7 @@ def prepare_dataset(name: str, raw_dir, out_dir, n_main: int, n_pilot: int, seed
         "pilot_questions": len(pilot),
         "main_questions": len(main),
     }
+    if confirm:
+        stats["confirm_questions"] = len(confirm)
     (out / "stats.json").write_text(json.dumps(stats, indent=2), encoding="utf-8")
     return stats

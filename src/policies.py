@@ -30,9 +30,26 @@ def stop_fixed(traj: dict, k: int) -> int:
     return min(k, len(traj["steps"]))
 
 
+def p1_signal(step: dict) -> bool:
+    return bool(step["p1_enough"])
+
+
+def p2_signal(steps: list[dict], i: int) -> bool:
+    if i == 0:
+        return False
+    draft = steps[i]["draft_answer"]
+    if is_abstention(draft):
+        return False
+    return normalize_answer(draft) == normalize_answer(steps[i - 1]["draft_answer"])
+
+
+def p3_signal(step: dict) -> bool:
+    return bool(step["p3_covered"]) and all(step["p3_covered"])
+
+
 def stop_p1(traj: dict) -> int:
     for step in traj["steps"]:
-        if step["p1_enough"]:
+        if p1_signal(step):
             return step["step"]
     return len(traj["steps"])
 
@@ -40,17 +57,14 @@ def stop_p1(traj: dict) -> int:
 def stop_p2(traj: dict) -> int:
     steps = traj["steps"]
     for i in range(1, len(steps)):
-        draft = steps[i]["draft_answer"]
-        if is_abstention(draft):
-            continue
-        if normalize_answer(draft) == normalize_answer(steps[i - 1]["draft_answer"]):
+        if p2_signal(steps, i):
             return steps[i]["step"]
     return len(steps)
 
 
 def stop_p3(traj: dict) -> int:
     for step in traj["steps"]:
-        if step["p3_covered"] and all(step["p3_covered"]):
+        if p3_signal(step):
             return step["step"]
     return len(traj["steps"])
 

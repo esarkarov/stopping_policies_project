@@ -1,6 +1,7 @@
 import json
 
 import numpy as np
+import pytest
 
 from src.evaluate import classify, compare_to_fixed, error_table, evaluate, evaluate_trajectory, load_trajectories, summarize
 from src.stats import bootstrap_ci, paired_diff_ci
@@ -55,6 +56,7 @@ def test_tables_and_comparison_shapes():
     assert len(versus) == 15 and set(versus["policy"]) == {"P1", "P2", "P3"}
     p1_vs_k3 = versus[(versus["policy"] == "P1") & (versus["versus"] == "P0_k3")].iloc[0]
     assert p1_vs_k3["d_searches"] == -2 and p1_vs_k3["d_f1"] == 0
+    assert p1_vs_k3["d_tokens"] == (11 + 31 + 21) - (3 * 11 + 21) and "d_tokens_lo" in versus.columns
 
 
 def test_bootstrap_is_seeded_and_brackets_the_mean():
@@ -74,7 +76,8 @@ def test_loader_drops_duplicates_and_reads_aliases(tmp_path):
     traj_path, q_path = tmp_path / "t.jsonl", tmp_path / "q.jsonl"
     traj_path.write_text("\n".join(json.dumps(t) for t in (first, second, other)))
     q_path.write_text(json.dumps({"id": "q1", "answer_aliases": ["Alias"]}) + "\n" + json.dumps({"id": "q2", "answer_aliases": ["Other"]}))
-    loaded = load_trajectories(traj_path, q_path)
+    with pytest.warns(UserWarning, match="dropped 1 duplicate"):
+        loaded = load_trajectories(traj_path, q_path)
     assert [t["id"] for t in loaded] == ["q1", "q2"]
     assert loaded[0]["steps"][0]["draft_answer"] == "a" and loaded[0]["answer_aliases"] == ["Alias"]
     assert loaded[1]["answer_aliases"] == ["Kept"]

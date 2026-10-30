@@ -14,6 +14,7 @@ from src.agent import SearchAgent
 from src.config import load_config  
 from src.data import read_jsonl  
 from src.llm import OllamaLLM  
+from src.manifest import append_manifest, build_manifest  
 from src.retriever import BM25Retriever  
 
 
@@ -21,7 +22,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/default.yaml")
     parser.add_argument("--dataset", required=True, choices=["hotpotqa", "musique"])
-    parser.add_argument("--split", required=True, choices=["pilot", "main"])
+    parser.add_argument("--split", required=True, choices=["pilot", "main", "confirm"])
     parser.add_argument("--limit", type=int, default=None, help="only the first N questions")
     args = parser.parse_args()
 
@@ -41,6 +42,10 @@ def main() -> None:
     print(f"{args.dataset}/{args.split}: {len(done)} done, {len(todo)} to run, model {model}")
     if not todo:
         return
+
+    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    manifest = build_manifest(ROOT, cfg, model, host, args.dataset, args.split, len(todo))
+    append_manifest(out_path.with_suffix(".manifest.jsonl"), manifest)
 
     llm = OllamaLLM(
         model,
