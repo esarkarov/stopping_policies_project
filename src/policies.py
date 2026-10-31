@@ -3,6 +3,8 @@ from src.metrics import normalize_answer
 FIXED_BUDGETS = (1, 2, 3, 4, 5)
 ADAPTIVE = ("P1", "P2", "P3")
 POLICIES = tuple(f"P0_k{k}" for k in FIXED_BUDGETS) + ADAPTIVE + ("Oracle",)
+VARIANTS = ("P1_min2", "P3_min2", "P1_c2", "P1&P3", "P3&P2")
+BASE_POLICIES = {"P1_min2": ("P1",), "P3_min2": ("P3",), "P1_c2": ("P1",), "P1&P3": ("P1", "P3"), "P3&P2": ("P3", "P2")}
 
 ABSTENTION_PHRASES = (
     "unknown",
@@ -77,6 +79,21 @@ def stop_oracle(correct_by_step: list[bool], f1_by_step: list[float]) -> int:
     return next(i for i, value in enumerate(f1_by_step, 1) if value == best)
 
 
+def stop_variant(policy: str, traj: dict) -> int:
+    steps = traj["steps"]
+    rules = {
+        "P1_min2": lambda i: i >= 1 and p1_signal(steps[i]),
+        "P3_min2": lambda i: i >= 1 and p3_signal(steps[i]),
+        "P1_c2": lambda i: i >= 1 and p1_signal(steps[i]) and p1_signal(steps[i - 1]),
+        "P1&P3": lambda i: p1_signal(steps[i]) and p3_signal(steps[i]),
+        "P3&P2": lambda i: p3_signal(steps[i]) and p2_signal(steps, i),
+    }
+    for i in range(len(steps)):
+        if rules[policy](i):
+            return steps[i]["step"]
+    return len(steps)
+
+
 def stop_step(policy: str, traj: dict, correct_by_step: list[bool], f1_by_step: list[float]) -> int:
     if policy.startswith("P0_k"):
         return stop_fixed(traj, int(policy[4:]))
@@ -88,6 +105,8 @@ def stop_step(policy: str, traj: dict, correct_by_step: list[bool], f1_by_step: 
         return stop_p3(traj)
     if policy == "Oracle":
         return stop_oracle(correct_by_step, f1_by_step)
+    if policy in VARIANTS:
+        return stop_variant(policy, traj)
     raise ValueError(f"unknown policy {policy}")
 
 
@@ -109,6 +128,21 @@ def policy_cost(policy: str, traj: dict, stop: int) -> dict:
     elif policy == "P3":
         needed += [traj["decompose_call"]]
         needed += [step["calls"]["check_coverage"] for step in steps] + [last_answer]
+    elif policy == "P1_min2":
+        needed += [step["calls"]["check_enough"] for step in steps[1:]] + [last_answer]
+    elif policy == "P3_min2":
+        needed += [traj["decompose_call"]]
+        needed += [step["calls"]["check_coverage"] for step in steps[1:]] + [last_answer]
+    elif policy == "P1_c2":
+        needed += [step["calls"]["check_enough"] for step in steps] + [last_answer]
+    elif policy == "P1&P3":
+        needed += [traj["decompose_call"]]
+        needed += [step["calls"]["check_enough"] for step in steps]
+        needed += [step["calls"]["check_coverage"] for step in steps] + [last_answer]
+    elif policy == "P3&P2":
+        needed += [traj["decompose_call"]]
+        needed += [step["calls"]["check_coverage"] for step in steps]
+        needed += [step["calls"]["answer"] for step in steps]
     else:
         raise ValueError(f"unknown policy {policy}")
 

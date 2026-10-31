@@ -54,3 +54,18 @@ def test_compare_to_curve_matches_cost_by_interpolation():
     assert f1["cost_value"] == 3 and f1["adaptive"] == 1.0 and f1["fixed_curve"] == 1.0 and f1["diff"] == 0
     shared = compare_to_curve(df, "tokens_shared", n_boot=100, policies=("P1",))
     assert shared[shared["metric"] == "f1"].iloc[0]["cost_value"] < df[(df["policy"] == "P1")]["tokens"].mean()
+
+
+def test_variants_evaluate_and_compare_to_their_base():
+    from src.analysis import variants_vs_base
+    from src.evaluate import summarize
+    from src.policies import ADAPTIVE, VARIANTS
+
+    trajs = [make_traj(["Rome", "Paris", "Paris", "Paris", "Paris"], p1=[True, True, True, True, True], qid=f"q{i}") for i in range(5)]
+    df = evaluate(trajs, ("P0_k1", "P0_k2", *ADAPTIVE, *VARIANTS))
+    summary = summarize(df, n_boot=50, order=("P0_k1", "P0_k2", *ADAPTIVE, *VARIANTS))
+    assert list(summary["policy"])[-5:] == list(VARIANTS)
+    table = variants_vs_base(df, n_boot=50)
+    row = table[(table["variant"] == "P1_min2") & (table["base"] == "P1")].iloc[0]
+    assert row["d_searches"] == 1 and row["d_f1"] == 1.0
+    assert len(table) == 7

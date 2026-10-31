@@ -61,3 +61,27 @@ def test_signals_match_the_stop_rules():
     assert [p2_signal(steps, i) for i in range(5)] == [False, False, True, False, True]
     assert [p3_signal(s) for s in steps] == [False, True, False, False, False]
     assert stop_p1(traj) == 2 and stop_p2(traj) == 3 and stop_p3(traj) == 2
+
+
+def test_variant_stop_rules():
+    from src.policies import stop_variant
+
+    p1 = [True, False, True, True, True]
+    p3 = [[True, True], [False, False], [True, True], [False, False], [False, False]]
+    traj = make_traj(["A", "B", "B", "C", "C"], p1=p1, p3=p3)
+    assert stop_p1(traj) == 1 and stop_variant("P1_min2", traj) == 3 and stop_variant("P1_c2", traj) == 4
+    assert stop_p3(traj) == 1 and stop_variant("P3_min2", traj) == 3
+    assert stop_variant("P1&P3", traj) == 1
+    assert stop_variant("P3&P2", traj) == 3
+    never = make_traj(list("abcde"))
+    assert [stop_variant(v, never) for v in ("P1_min2", "P3_min2", "P1_c2", "P1&P3", "P3&P2")] == [5] * 5
+    assert stop_step("P1_c2", traj, [False] * 5, [0.0] * 5) == 4
+
+
+def test_variant_costs_count_only_the_calls_they_need():
+    traj = make_traj(list("abcde"))
+    assert policy_cost("P1_min2", traj, 3) == {"calls": 6, "tokens": 3 * 11 + 2 * 31 + 21}
+    assert policy_cost("P3_min2", traj, 3) == {"calls": 7, "tokens": 55 + 3 * 11 + 2 * 41 + 21}
+    assert policy_cost("P1_c2", traj, 3) == policy_cost("P1", traj, 3)
+    assert policy_cost("P1&P3", traj, 3) == {"calls": 11, "tokens": 55 + 3 * 11 + 3 * 31 + 3 * 41 + 21}
+    assert policy_cost("P3&P2", traj, 3) == {"calls": 10, "tokens": 55 + 3 * 11 + 3 * 41 + 3 * 21}

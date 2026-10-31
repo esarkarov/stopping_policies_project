@@ -6,7 +6,7 @@ import pandas as pd
 
 from src.evaluate import answers_of
 from src.metrics import best_over_answers, exact_match, f1_score
-from src.policies import ADAPTIVE, FIXED_BUDGETS, POLICIES, p1_signal, p2_signal, p3_signal, policy_cost, stop_p1, stop_p2, stop_p3
+from src.policies import ADAPTIVE, BASE_POLICIES, FIXED_BUDGETS, POLICIES, p1_signal, p2_signal, p3_signal, policy_cost, stop_p1, stop_p2, stop_p3
 from src.stats import bootstrap_ci, paired_diff_ci
 
 OUTCOMES = ("correct", "near miss", "reading failure", "retrieval failure")
@@ -167,7 +167,7 @@ def with_shared_check_cost(df: pd.DataFrame, trajectories: list[dict]) -> pd.Dat
     return df.assign(tokens_shared=shared)
 
 
-def compare_to_curve(df: pd.DataFrame, cost: str = "searches", n_boot: int = 10000, seed: int = 42, policies=ADAPTIVE) -> pd.DataFrame:
+def compare_to_curve(df: pd.DataFrame, cost: str = "searches", n_boot: int = 10000, seed: int = 42, policies=ADAPTIVE, alpha: float = 0.05) -> pd.DataFrame:
     fixed = [f"P0_k{k}" for k in FIXED_BUDGETS]
     fixed_cost = np.array([df.loc[df["policy"] == name, cost].mean() for name in fixed])
     wide = {metric: df.pivot(index="id", columns="policy", values=metric) for metric in METRICS}
@@ -181,7 +181,7 @@ def compare_to_curve(df: pd.DataFrame, cost: str = "searches", n_boot: int = 100
         for metric in METRICS:
             table = wide[metric]
             curve = (1 - weight) * table[fixed[j]] + weight * table[fixed[j + 1]]
-            mean, lo, hi = paired_diff_ci(table[policy], curve, n_boot, seed)
+            mean, lo, hi = paired_diff_ci(table[policy], curve, n_boot, seed, alpha)
             rows.append(
                 {
                     "policy": policy,
@@ -239,3 +239,18 @@ def p1_threshold_curve(df: pd.DataFrame, trajectories: list[dict], p_yes: dict, 
     gaps = curves[curves["metric"] == "f1"].pivot(index="policy", columns="cost", values=["diff", "diff_lo", "diff_hi"])
     gaps.columns = [f"f1_{stat}_vs_curve_{cost}" for stat, cost in gaps.columns]
     return summary.merge(gaps.reset_index(), on="policy", how="left")
+
+
+def variants_vs_base(df: pd.DataFrame, n_boot: int = 10000, seed: int = 42, alpha: float = 0.05) -> pd.DataFrame:
+    wide = {metric: df.pivot(index="id", columns="policy", values=metric) for metric in ("em", "f1", "searches", "tokens")}
+    rows = []
+    for variant, bases in BASE_POLICIES.items():
+        if variant not in set(df["policy"]):
+            continue
+        for base in bases:
+            row = {"variant": variant, "base": base}
+            for metric, table in wide.items():
+                mean, lo, hi = paired_diff_ci(table[variant], table[base], n_boot, seed, alpha)
+                row.update({f"d_{metric}": mean, f"d_{metric}_lo": lo, f"d_{metric}_hi": hi})
+            rows.append(row)
+    return pd.DataFrame(rows)

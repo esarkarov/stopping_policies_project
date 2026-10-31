@@ -84,9 +84,9 @@ def evaluate(trajectories: list[dict], policies=POLICIES) -> pd.DataFrame:
     return pd.DataFrame([row for traj in trajectories for row in evaluate_trajectory(traj, policies)])
 
 
-def summarize(df: pd.DataFrame, n_boot: int = 10000, seed: int = 42) -> pd.DataFrame:
+def summarize(df: pd.DataFrame, n_boot: int = 10000, seed: int = 42, order=POLICIES) -> pd.DataFrame:
     rows = []
-    for policy in [p for p in POLICIES if p in set(df["policy"])]:
+    for policy in [p for p in order if p in set(df["policy"])]:
         part = df[df["policy"] == policy].sort_values("id")
         row = {"policy": policy, "n": len(part)}
         for metric in ("em", "f1", "searches"):
@@ -107,10 +107,10 @@ def error_table(df: pd.DataFrame) -> pd.DataFrame:
     return counts.reindex([p for p in POLICIES if p in counts.index]).reset_index()
 
 
-def compare_to_fixed(df: pd.DataFrame, n_boot: int = 10000, seed: int = 42) -> pd.DataFrame:
+def compare_to_fixed(df: pd.DataFrame, n_boot: int = 10000, seed: int = 42, policies=ADAPTIVE) -> pd.DataFrame:
     wide = {metric: df.pivot(index="id", columns="policy", values=metric) for metric in ("em", "f1", "searches", "tokens")}
     rows = []
-    for policy in [p for p in ADAPTIVE if p in set(df["policy"])]:
+    for policy in [p for p in policies if p in set(df["policy"])]:
         for k in FIXED_BUDGETS:
             fixed = f"P0_k{k}"
             row = {"policy": policy, "versus": fixed}
