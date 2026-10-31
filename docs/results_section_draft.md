@@ -144,7 +144,7 @@ Qualitative examples (`*_examples.csv`):
 
 ## 7. Post-hoc variants and P(yes) thresholds (confirm set only)
 
-Five variants and a threshold family were defined after looking at the main set (`docs/variants_preregistration.md`). The rules and the decision criterion are written down in that document, which says it was made before the confirm set was evaluated. [Before submission, check with `git log` that the declaration commit precedes the commit that added `*_confirm_*` tables, and cite the hash here.] Criterion: a variant counts as an improvement only if the 99% interval of the F1 gap to the equal-cost fixed policy is above zero on confirm; a result in one dataset only is dataset-specific. All variants are reported.
+Five variants and a threshold family were defined after looking at the main set (`docs/variants_preregistration.md`). The rules and the decision criterion were committed in `a45a429` (31 Oct 20:35), before the confirmation tables were generated and committed in `9ed2d9b` (31 Oct 21:12). The confirm trajectories were saved earlier but were not evaluated before the declaration. Criterion: a variant counts as an improvement only if the 99% interval of the F1 gap to the equal-cost fixed policy is above zero on confirm; a result in one dataset only is dataset-specific. All variants are reported.
 
 | Variant   | Stops at the first search s where | HotpotQA F1 / searches / tokens | MuSiQue F1 / searches / tokens |
 | --------- | --------------------------------- | ------------------------------- | ------------------------------ |
