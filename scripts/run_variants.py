@@ -1,8 +1,3 @@
-"""Evaluate the declared post-hoc stopping variants on saved trajectories.
-
-No model is needed:
-    docker compose run --rm --no-deps app python scripts/run_variants.py --dataset hotpotqa --split confirm
-"""
 import argparse
 import sys
 from pathlib import Path
