@@ -86,11 +86,12 @@ Test: keep each policy's set of stop steps but shuffle them across questions (20
 
 ## 4. Stop behaviour
 
-Figure: `{dataset}_{main,confirm}_stop_steps.png`; table: `*_stop_steps.csv`. Percentages are main / confirm.
+Figure: `{dataset}_pooled_stop_steps.png`; table: `*_pooled_stop_steps.csv` (pooled, n = 700 per dataset).
 
-- HotpotQA: P1 stops at search 1 for 36% / 40% of questions and reaches search 5 for 23% / 21%; P3 stops at search 1 for 35% / 35%. P2 cannot stop at search 1 (it needs two drafts); 53% / 55% of its stops are at search 2.
-- MuSiQue: P1 reaches search 5 in 61% / 67% of questions, P3 in 50% / 56%, P2 in 27% / 27%. The self-decided policies rarely stop early on the harder dataset.
-- The oracle stops at search 1 for 63% / 63% (HotpotQA) and 60% / 62% (MuSiQue): a correct draft often exists after one search, so the headroom is large, but the policies do not find it.
+- HotpotQA: P1 stops at search 1 for 39% of questions (270) and reaches search 5 for 22% (154); P3 stops at search 1 for 35% (245) and reaches search 5 for 22% (153). P2 cannot stop at search 1 (it needs two drafts); 54% of its stops are at search 2 (379) and 11% at search 5 (74).
+- MuSiQue: P1 reaches search 5 in 64% of questions (450), P3 in 53% (372), P2 in 27% (191). P1 and P3 stop at search 1 for only 11% and 12%. The self-decided policies rarely stop early on the harder dataset.
+- The oracle stops at search 1 for 63% (HotpotQA, 440) and 61% (MuSiQue, 425) of questions: a correct draft often exists after one search, so the headroom is large, but the policies do not find it.
+- Main and confirm agree: the shares differ by at most 6 points between the two sets (for example P1 reaching search 5 on MuSiQue: 61% on main, 67% on confirm).
 
 ## 5. Difficulty (MuSiQue by number of hops)
 
