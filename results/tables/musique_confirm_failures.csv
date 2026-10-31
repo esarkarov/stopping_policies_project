@@ -1,0 +1,10 @@
+policy,correct,near miss,reading failure,retrieval failure
+P0_k1,25,33,7,335
+P0_k2,54,53,33,260
+P0_k3,65,56,49,230
+P0_k4,82,48,56,214
+P0_k5,93,47,65,195
+P1,86,47,47,220
+P2,75,52,46,227
+P3,80,51,49,220
+Oracle,112,67,7,214
